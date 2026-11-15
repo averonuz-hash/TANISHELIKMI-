@@ -1,0 +1,18 @@
+[
+  {"id": "01", "say": "Har kuni ertalab uyimizda birinchi boʻlib oshxonada olov yonadi.",
+   "sub": "Har kuni ertalab uyimizda birinchi boʻlib oshxonada olov yonadi."},
+  {"id": "02", "say": "Oyijonim bizga eng mazali taomlarni pishiradi.",
+   "sub": "Oyijonim bizga eng mazali taomlarni pishiradi."},
+  {"id": "03", "say": "Bu yil men ham unga eng yaxshi sovgʻani topdim...",
+   "sub": "Bu yil men ham unga eng yaxshi sovgʻani topdim..."},
+  {"id": "04", "say": "Oltin eshikli Lifetech...", "sub": "Oltin eshikli Lifetech..."},
+  {"id": "05", "say": "Zamonaviy kulrang...", "sub": "Zamonaviy kulrang..."},
+  {"id": "06", "say": "Nafis, och rangli...", "sub": "Nafis, och rangli..."},
+  {"id": "07", "say": "Yoki tejamkor Ferre!", "sub": "Yoki tejamkor Ferre!"},
+  {"id": "08", "say": "Narxi atigi ikki million toʻqson toʻqqiz ming, toʻqqiz yuz toʻqson toʻqqiz soʻmdan. Naqd yoki oʻn ikki oyga boʻlib toʻlang!",
+   "sub": "Narxi atigi 2.099.999 soʻmdan. Naqd yoki 12 oyga boʻlib toʻlang!"},
+  {"id": "09", "say": "Oyijonim... bu sizga!", "sub": "Oyijonim... bu sizga!", "rate": "-15%", "nosub": true},
+  {"id": "10", "say": "Hammasi AVERON doʻkonida. Qoʻngʻiroq qiling: ellik, yetti yuz yetmish ikki, yigirma besh, nol nol.",
+   "sub": "Hammasi AVERON doʻkonida. Qoʻngʻiroq qiling: 50-772-25-00"},
+  {"id": "11", "say": "AVERON — sifat va qulay narx!", "sub": "AVERON — sifat va qulay narx!"}
+]

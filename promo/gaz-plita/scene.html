@@ -1,0 +1,424 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AVERON — Gaz plitalar</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #000; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+/*
+ * AVERON promo — gas stoves (real store photos, retouched by retouch.py).
+ * Deterministic renderer: window.drawFrame(t). 1080x1920, 24 s, 120 BPM (beat 0.5 s, bar 2 s).
+ * Must be served over http (render.js does it) so the canvas is not tainted by file:// images.
+ */
+const W = 1080, H = 1920, DUR = 24, BEAT = 0.5;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+
+const BLUE = '#0B4DFF', RED = '#FF2D3B', INK = '#0D1321', YEL = '#FFD23F', GREEN = '#22C55E';
+const FONT = 'Inter';
+const PHONES = ['50-772-25-00', '77-200-85-04'];
+
+// Prices from the store's AVERON TECH price tags, rounded to the store's x.x99.999 format (monthly: xx9.999)
+const PRODUCTS = [
+  { id: 'lt110', brand: 'LIFETECH', model: 'LT-110', desc: 'Qora korpus · oltin rang oynali eshik', price: 2099999, m12: 249999,
+    callout: { x: 335, y: 240, label: 'Duxovka 40–275 °C' } },
+  { id: 'lt305', brand: 'LIFETECH', model: 'LT-305', desc: 'Toʻq kulrang · oynali eshik', price: 2399999, m12: 289999,
+    callout: { x: 430, y: 270, label: 'Duxovka 40–275 °C' } },
+  { id: 'lt265', brand: 'LIFETECH', model: 'LT-265', desc: 'Och kulrang · oynali eshik', price: 2399999, m12: 289999,
+    callout: { x: 465, y: 370, label: 'Duxovka 40–275 °C' } },
+  { id: 'ferre', brand: 'FERRE', model: 'BT60-F31', desc: 'Toʻq jigarrang · shisha eshik', price: 2499999, m12: 299999,
+    callout: { x: 262, y: 1040, label: 'Energiya sinfi A' } },
+];
+const T_HOOK = 1.0, T_TITLE = [1.0, 3.0], T_PROD0 = 3.0, PROD_LEN = 4.0, T_CTA = 19.0;
+
+// ---------- helpers ----------
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = k => 1 - Math.pow(1 - k, 3);
+const easeIn = k => k * k * k;
+const easeInOut = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const backOut = (k, s = 1.9) => 1 + (s + 1) * Math.pow(k - 1, 3) + s * Math.pow(k - 1, 2);
+const beatPulse = t => Math.exp(-((t % BEAT) / BEAT) * 6);
+function rand(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+function rr(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath(); ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function text(str, x, y, { size = 80, weight = 900, color = '#fff', align = 'center', spacing = 0, alpha = 1, shadow = null } = {}) {
+  ctx.save(); ctx.globalAlpha *= alpha;
+  ctx.font = `${weight} ${size}px ${FONT}`; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.letterSpacing = spacing + 'px';
+  if (shadow) { ctx.shadowColor = shadow.c; ctx.shadowBlur = shadow.b; ctx.shadowOffsetY = shadow.y || 0; }
+  ctx.fillStyle = color; ctx.fillText(str, x, y); ctx.restore();
+}
+function measure(str, size, weight = 900, spacing = 0) {
+  ctx.save(); ctx.font = `${weight} ${size}px ${FONT}`; ctx.letterSpacing = spacing + 'px';
+  const w = ctx.measureText(str).width; ctx.restore(); return w;
+}
+function pill(str, cx, cy, { size = 44, fg = '#fff', bg = INK, padX = 34, padY = 18, alpha = 1, scale = 1, rot = 0, weight = 800 } = {}) {
+  const w = measure(str, size, weight, 1) + padX * 2, h = size + padY * 2;
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(cx, cy); ctx.rotate(rot); ctx.scale(scale, scale);
+  ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
+  rr(-w / 2, -h / 2, w, h, h / 2); ctx.fillStyle = bg; ctx.fill(); ctx.shadowColor = 'transparent';
+  text(str, 0, 2, { size, weight, color: fg, spacing: 1 }); ctx.restore();
+  return w;
+}
+const fmt = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+function logo(cx, cy, size, { color = '#fff', accent = YEL, alpha = 1, align = 'center' } = {}) {
+  const sp = size * .08, w = measure('AVERON', size, 900, sp);
+  const x0 = align === 'left' ? cx : cx - w / 2;
+  ctx.save(); ctx.globalAlpha *= alpha;
+  text('A', x0, cy, { size, color: accent, align: 'left', spacing: sp });
+  text('VERON', x0 + measure('A', size, 900, sp), cy, { size, color, align: 'left', spacing: sp });
+  ctx.restore();
+}
+
+// ---------- assets ----------
+const IMG = {}, BLUR = {};
+function load(src) { return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
+function makeBlur(im) {
+  const c = document.createElement('canvas'); c.width = 540; c.height = 960;
+  const x = c.getContext('2d');
+  const s = Math.max(c.width / im.width, c.height / im.height) * 1.15;
+  x.filter = 'blur(26px) saturate(1.2)';
+  x.drawImage(im, (c.width - im.width * s) / 2, (c.height - im.height * s) / 2, im.width * s, im.height * s);
+  x.filter = 'none'; x.fillStyle = 'rgba(8,10,18,.55)'; x.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
+// draw a photo to cover a rect, with zoom z around focus (fx, fy in image px)
+function photoCover(im, x, y, w, h, z = 1, fx = im.width / 2, fy = im.height / 2) {
+  const s = Math.max(w / im.width, h / im.height) * z;
+  let ox = x + w / 2 - fx * s, oy = y + h / 2 - fy * s;
+  ox = Math.min(x, Math.max(x + w - im.width * s, ox)); oy = Math.min(y, Math.max(y + h - im.height * s, oy));
+  ctx.drawImage(im, ox, oy, im.width * s, im.height * s);
+  return { s, ox, oy };
+}
+
+// ---------- gas flame (hook) ----------
+function burner(cx, cy, R, t, ign) {
+  // ellipse perspective (camera looks down at ~55°)
+  const sy = .55;
+  // glow
+  if (ign > 0) {
+    const g = ctx.createRadialGradient(cx, cy, R * .2, cx, cy, R * 3.2);
+    g.addColorStop(0, `rgba(60,120,255,${.55 * ign})`); g.addColorStop(1, 'rgba(20,40,120,0)');
+    ctx.fillStyle = g; ctx.fillRect(cx - R * 3.4, cy - R * 3.4, R * 6.8, R * 6.8);
+  }
+  // pan support grates
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(1, sy);
+  ctx.strokeStyle = '#2a2d33'; ctx.lineWidth = 22; ctx.lineCap = 'round';
+  for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; ctx.beginPath(); ctx.moveTo(Math.cos(a) * R * 1.35, Math.sin(a) * R * 1.35); ctx.lineTo(Math.cos(a) * R * 2.6, Math.sin(a) * R * 2.6); ctx.stroke(); }
+  // burner base + cap
+  let g = ctx.createRadialGradient(-R * .3, -R * .3, 5, 0, 0, R * 1.25);
+  g.addColorStop(0, '#6b7079'); g.addColorStop(1, '#1d2026');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R * 1.18, 0, 7); ctx.fill();
+  g = ctx.createRadialGradient(-R * .25, -R * .35, 4, 0, 0, R * .8);
+  g.addColorStop(0, '#5a5f68'); g.addColorStop(1, '#121418');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R * .78, 0, 7); ctx.fill();
+  ctx.restore();
+  if (ign <= 0) return;
+  // flames: tongues around the ring, additive
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const n = 34, r = rand(9);
+  for (let pass = 0; pass < 2; pass++) for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2;
+    const back = Math.sin(a) < 0;                 // far side drawn first/dimmer
+    if ((pass === 0) !== back) continue;
+    const ph = r() * 10;
+    const fl = .75 + .25 * Math.sin(t * 23 + ph) * Math.sin(t * 17 + ph * 2);
+    const len = R * (.42 + .18 * fl) * ign;
+    const bx = cx + Math.cos(a) * R * .92, by = cy + Math.sin(a) * R * .92 * sy;
+    // flame points outward and up
+    const ox = Math.cos(a) * len * .55, oy = Math.sin(a) * len * .55 * sy - len * .75;
+    const wdt = R * .085;
+    const grad = ctx.createLinearGradient(bx, by, bx + ox, by + oy);
+    grad.addColorStop(0, `rgba(170,215,255,${.95 * ign})`);
+    grad.addColorStop(.35, `rgba(60,130,255,${.75 * ign})`);
+    grad.addColorStop(1, 'rgba(30,60,255,0)');
+    ctx.fillStyle = grad;
+    const nx = -oy, ny = ox, nl = Math.hypot(nx, ny) || 1;
+    ctx.beginPath();
+    ctx.moveTo(bx + nx / nl * wdt, by + ny / nl * wdt);
+    ctx.quadraticCurveTo(bx + ox * .5 + nx / nl * wdt * 1.2, by + oy * .5 + ny / nl * wdt * 1.2, bx + ox, by + oy);
+    ctx.quadraticCurveTo(bx + ox * .5 - nx / nl * wdt * 1.2, by + oy * .5 - ny / nl * wdt * 1.2, bx - nx / nl * wdt, by - ny / nl * wdt);
+    ctx.closePath(); ctx.globalAlpha = back ? .6 : 1; ctx.fill();
+  }
+  // inner bright cones
+  ctx.globalAlpha = .8 * ign;
+  ctx.strokeStyle = 'rgba(150,200,255,.9)'; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.ellipse(cx, cy - 4, R * .95, R * .95 * sy, 0, 0, 7); ctx.stroke();
+  ctx.restore();
+}
+function spark(cx, cy, k) {
+  if (k <= 0 || k >= 1) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const r = rand(4);
+  for (let i = 0; i < 14; i++) {
+    const a = r() * Math.PI * 2, d = easeOut(k) * (40 + r() * 90);
+    ctx.fillStyle = `rgba(255,${200 + r() * 55 | 0},150,${1 - k})`;
+    ctx.beginPath(); ctx.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d * .6, 3 + r() * 3, 0, 7); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ---------- effects ----------
+function flash(k, a = .85) { if (k <= 0 || k >= 1) return; ctx.save(); ctx.globalAlpha = (1 - k) * a; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+function sheen(x, y, w, h, k) { // diagonal light sweep
+  if (k <= 0 || k >= 1) return;
+  ctx.save(); rr(x, y, w, h, 30); ctx.clip();
+  const sx = lerp(x - w * .6, x + w * 1.6, easeInOut(k));
+  ctx.translate(sx, y); ctx.rotate(.35);
+  const g = ctx.createLinearGradient(-120, 0, 120, 0);
+  g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.5, 'rgba(255,255,255,.38)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.fillRect(-120, -h, 240, h * 3);
+  ctx.restore();
+}
+function phoneIcon(x, y, s) {
+  ctx.save(); ctx.translate(x, y); ctx.fillStyle = '#fff'; ctx.beginPath();
+  ctx.moveTo(-s * .62, -s * .78); ctx.quadraticCurveTo(-s * .95, -s * .5, -s * .7, 0);
+  ctx.quadraticCurveTo(-s * .2, s * .75, s * .5, s * .78); ctx.quadraticCurveTo(s * .8, s * .8, s * .85, s * .5);
+  ctx.lineTo(s * .45, s * .2); ctx.quadraticCurveTo(s * .25, s * .3, s * .1, s * .35);
+  ctx.quadraticCurveTo(-s * .25, s * .1, -s * .35, -s * .15); ctx.quadraticCurveTo(-s * .3, -s * .3, -s * .2, -s * .45);
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+function phoneButton(num, cx, cy, k, t, phase, bw = 860, bh = 136) {
+  if (k <= 0) return;
+  const pulse = 1 + Math.exp(-(((t + phase) % 1)) * 6) * .045;
+  ctx.save(); ctx.translate(cx, cy); const sc = backOut(k) * pulse; ctx.scale(sc, sc);
+  ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12;
+  rr(-bw / 2, -bh / 2, bw, bh, bh / 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.shadowColor = 'transparent';
+  ctx.fillStyle = GREEN; ctx.beginPath(); ctx.arc(-bw / 2 + bh / 2 + 4, 0, bh / 2 - 14, 0, 7); ctx.fill();
+  phoneIcon(-bw / 2 + bh / 2 + 4, 0, bh * .2);
+  text(num, bh / 2 - 6, 4, { size: bh * .6, weight: 900, color: INK, spacing: 1 });
+  ctx.restore();
+}
+function ticker(t, y, alpha) { // scrolling info strip
+  if (alpha <= 0) return;
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.fillStyle = YEL; ctx.fillRect(0, y, W, 72);
+  const msg = `TEL: ${PHONES[0]}   •   ${PHONES[1]}   •   3 · 6 · 9 · 12 OYGA MUDDATLI TOʻLOV   •   AVERON   •   `;
+  const mw = measure(msg, 36, 800, 0);
+  let x = -((t * 160) % mw);
+  ctx.beginPath(); ctx.rect(0, y, W, 72); ctx.clip();
+  while (x < W) { text(msg, x, y + 38, { size: 36, weight: 800, color: INK, align: 'left', spacing: 0 }); x += mw; }
+  ctx.restore();
+}
+
+// ---------- product scene ----------
+const CARD = { x: 90, y: 450, w: 900, h: 900 };
+function productScene(p, t, t0, idx) {
+  const lt = t - t0;                        // local time 0..4
+  const im = IMG[p.id];
+  // enter: whip from right; exit: whip to left
+  const enter = easeOut(seg(lt, 0, .35)), exit = easeIn(seg(lt, PROD_LEN - .3, PROD_LEN));
+  const dx = (1 - enter) * W * 1.1 - exit * W * 1.1;
+  // background (blurred same photo)
+  ctx.drawImage(BLUR[p.id], 0, 0, W, H);
+  // card
+  ctx.save(); ctx.translate(dx, 0);
+  const punch = 1 + beatPulse(t) * .012 + (1 - easeOut(seg(lt, 0, .5))) * .06;
+  ctx.translate(W / 2, CARD.y + CARD.h / 2); ctx.scale(punch, punch); ctx.translate(-W / 2, -(CARD.y + CARD.h / 2));
+  // motion-blur ghosts while whipping
+  const speed = Math.abs((1 - enter) + exit);
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 50; ctx.shadowOffsetY = 20;
+  rr(CARD.x, CARD.y, CARD.w, CARD.h, 30); ctx.fillStyle = '#111'; ctx.fill(); ctx.restore();
+  ctx.save(); rr(CARD.x, CARD.y, CARD.w, CARD.h, 30); ctx.clip();
+  // Ken Burns: slow push in toward the control panel, then ease to the whole stove
+  const z = lerp(1.0, 1.10, easeInOut(seg(lt, 0, PROD_LEN)));
+  const fy = lerp(im.height * .45, im.height * .40, seg(lt, 0, PROD_LEN));
+  const geo = photoCover(im, CARD.x, CARD.y, CARD.w, CARD.h, z, im.width / 2, fy);
+  if (speed > .02) for (let g = 1; g <= 3; g++) { ctx.globalAlpha = .18; photoCover(im, CARD.x + g * 30 * Math.sign(dx || 1), CARD.y, CARD.w, CARD.h, z, im.width / 2, fy); }
+  ctx.globalAlpha = 1;
+  // subtle grade: vignette
+  const vg = ctx.createRadialGradient(W / 2, CARD.y + CARD.h / 2, CARD.w * .35, W / 2, CARD.y + CARD.h / 2, CARD.w * .8);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.28)');
+  ctx.fillStyle = vg; ctx.fillRect(CARD.x, CARD.y, CARD.w, CARD.h);
+  ctx.restore();
+  sheen(CARD.x, CARD.y, CARD.w, CARD.h, seg(lt, .5, 1.4));
+  // callout on a real detail of the photo
+  const ck = seg(lt, 1.1, 1.45), ca = 1 - seg(lt, 3.3, 3.6);
+  if (ck > 0 && ca > 0) {
+    const px = geo.ox + p.callout.x * geo.s, py = geo.oy + p.callout.y * geo.s;
+    ctx.save(); ctx.globalAlpha = ca;
+    const rp = (lt * 1.6) % 1;
+    ctx.strokeStyle = YEL; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.arc(px, py, 46 * backOut(ck), 0, 7); ctx.stroke();
+    ctx.globalAlpha = ca * (1 - rp); ctx.beginPath(); ctx.arc(px, py, 46 + rp * 50, 0, 7); ctx.stroke();
+    ctx.globalAlpha = ca;
+    const below = py < CARD.y + CARD.h * .5;
+    const ly = py + (below ? 120 : -120), lx = clamp(px + 150, CARD.x + 230, CARD.x + CARD.w - 230);
+    ctx.beginPath(); ctx.moveTo(px + (below ? 20 : 20), py + (below ? 42 : -42)); ctx.lineTo(lx - 40, ly + (below ? -36 : 36)); ctx.stroke();
+    pill(p.callout.label, lx, ly, { size: 40, bg: YEL, fg: INK, scale: backOut(ck), weight: 900 });
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // header: brand + model + description
+  const hk = seg(lt, .1, .45), hk2 = seg(lt, .2, .55), hk3 = seg(lt, .35, .7);
+  const hx = (1 - easeOut(hk)) * -500 - exit * 600;
+  ctx.save(); ctx.globalAlpha = 1 - exit;
+  pill(p.brand, W / 2 + hx, 160, { size: 40, bg: 'rgba(255,255,255,.16)', fg: '#fff', alpha: hk, padX: 30, padY: 14 });
+  ctx.save(); ctx.translate(W / 2 - hx * .6, 280); const ms = lerp(1.8, 1, easeOut(hk2)); ctx.scale(ms, ms);
+  text(p.model, 0, 0, { size: 150, weight: 900, color: '#fff', spacing: 2, alpha: hk2, shadow: { c: 'rgba(0,0,0,.5)', b: 24, y: 6 } });
+  ctx.restore();
+  text(p.desc, W / 2, 390, { size: 42, weight: 600, color: 'rgba(255,255,255,.88)', alpha: hk3 });
+  ctx.restore();
+
+  // price block
+  const pk = seg(lt, .6, 1.0), slam = seg(lt, 1.0, 1.25);
+  if (pk > 0) {
+    ctx.save(); ctx.globalAlpha = 1 - exit; ctx.translate(-exit * 500, 0);
+    const val = lerp(p.price * .55, p.price, easeOut(pk));
+    const sc = 1 + (1 - backOut(slam, 3)) * .2 * (pk >= 1) + beatPulse(t) * .02 * (slam >= 1);
+    ctx.save(); ctx.translate(W / 2, 1515); ctx.scale(sc, sc); ctx.rotate(-.015);
+    // red price tag plate
+    const pw = measure(fmt(val), 118, 900, -2) + measure(' soʻm', 56, 900) + 90;
+    rr(-pw / 2, -82, pw, 164, 26); ctx.fillStyle = RED; ctx.shadowColor = 'rgba(255,45,59,.5)'; ctx.shadowBlur = 40; ctx.fill(); ctx.shadowColor = 'transparent';
+    const nw = measure(fmt(val), 118, 900, -2);
+    text(fmt(val), -pw / 2 + 45, 4, { size: 118, weight: 900, color: '#fff', align: 'left', spacing: -2 });
+    text('soʻm', -pw / 2 + 55 + nw, 14, { size: 56, weight: 900, color: '#fff', align: 'left' });
+    text('NAQD', -pw / 2 + 20, -100, { size: 34, weight: 800, color: YEL, align: 'left', spacing: 3 });
+    ctx.restore();
+    const ik = seg(lt, 1.3, 1.6);
+    if (ik > 0) pill(`12 oyga: ${fmt(p.m12)} soʻm / oy`, W / 2, 1665, { size: 44, bg: '#fff', fg: INK, scale: backOut(ik), weight: 900 });
+    ctx.restore();
+  }
+  // index dots
+  for (let i = 0; i < PRODUCTS.length; i++) {
+    ctx.fillStyle = i === idx ? YEL : 'rgba(255,255,255,.35)';
+    rr(W / 2 - 90 + i * 48, 66, i === idx ? 36 : 20, 10, 5); ctx.fill();
+  }
+}
+
+// ---------- frame ----------
+function drawFrame(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#05070c'; ctx.fillRect(0, 0, W, H);
+
+  // camera shake on hits
+  const hits = [0.38, 1.0, 3.0, 7.0, 11.0, 15.0, 19.0];
+  let shake = 0; for (const h0 of hits) { const d = t - h0; if (d >= 0 && d < .25) shake = Math.max(shake, (1 - d / .25) * 12); }
+  if (shake) ctx.translate(Math.sin(t * 90) * shake, Math.cos(t * 77) * shake);
+
+  // ===== HOOK: gas burner ignites =====
+  if (t < T_TITLE[0] + .25) {
+    const ign = easeOut(seg(t, .38, .7));
+    const zoom = lerp(1.0, 1.25, easeIn(seg(t, .6, 1.2)));
+    ctx.save(); ctx.translate(W / 2, 980); ctx.scale(zoom, zoom); ctx.translate(-W / 2, -980);
+    // dark steel cooktop
+    const g = ctx.createRadialGradient(W / 2, 980, 50, W / 2, 980, 1100);
+    g.addColorStop(0, '#20232a'); g.addColorStop(1, '#07080b');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    burner(W / 2, 980, 190, t, ign);
+    spark(W / 2 + 175, 960, seg(t, .1, .35));
+    spark(W / 2 - 160, 1000, seg(t, .25, .5));
+    ctx.restore();
+    text('Oshxonangiz uchun', W / 2, 520, { size: 64, weight: 700, color: '#fff', alpha: seg(t, .45, .7) * (1 - seg(t, .9, 1.05)) });
+    text('YANGI GAZ PLITA!', W / 2, 615, { size: 92, weight: 900, color: YEL, alpha: seg(t, .55, .8) * (1 - seg(t, .9, 1.05)) });
+  }
+
+  // ===== TITLE + montage =====
+  if (t >= T_TITLE[0] - .02 && t < T_TITLE[1] + .3) {
+    const lt = t - T_TITLE[0];
+    const i = Math.min(3, Math.floor(lt / BEAT));      // 4 photos, one per beat
+    const local = (lt % BEAT) / BEAT;
+    const p = PRODUCTS[i];
+    ctx.save();
+    photoCover(IMG[p.id], 0, 0, W, H, 1.12 - local * .06, IMG[p.id].width / 2, IMG[p.id].height * .5);
+    ctx.fillStyle = 'rgba(5,7,12,.55)'; ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+    flash(local * 4, .5);
+    const k1 = seg(t, 1.0, 1.3), k2 = seg(t, 1.25, 1.55), k3 = seg(t, 1.6, 1.95);
+    logo(W / 2, 560, 120, { alpha: k1 });
+    text('doʻkonida', W / 2, 660, { size: 50, weight: 700, color: 'rgba(255,255,255,.9)', alpha: k1 });
+    ctx.save(); ctx.translate(W / 2, 870); const s2 = lerp(2.4, 1, easeOut(k2)); ctx.scale(s2, s2); ctx.rotate(-.03);
+    if (k2 > 0) {
+      rr(-470, -105, 940, 210, 30); ctx.fillStyle = RED; ctx.fill();
+      text('GAZ PLITALAR', 0, 6, { size: 120, weight: 900, color: '#fff', spacing: 2 });
+    }
+    ctx.restore();
+    if (k3 > 0) {
+      text('narxi', W / 2, 1060, { size: 54, weight: 700, color: '#fff', alpha: k3 });
+      ctx.save(); ctx.translate(W / 2, 1170); ctx.scale(backOut(k3), backOut(k3));
+      text(`${fmt(PRODUCTS[0].price)} soʻmdan`, 0, 0, { size: 96, weight: 900, color: YEL, shadow: { c: 'rgba(0,0,0,.6)', b: 20, y: 6 } });
+      ctx.restore();
+      pill('3 · 6 · 9 · 12 oyga muddatli toʻlov', W / 2, 1320, { size: 44, bg: '#fff', fg: INK, scale: backOut(seg(t, 1.9, 2.2)), weight: 900 });
+    }
+  }
+
+  // ===== PRODUCTS =====
+  PRODUCTS.forEach((p, i) => {
+    const t0 = T_PROD0 + i * PROD_LEN;
+    if (t >= t0 && t < t0 + PROD_LEN) productScene(p, t, t0, i);
+  });
+  if (t >= T_PROD0 && t < T_CTA) {
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    logo(48, 66, 40, { align: 'left', alpha: .95 });
+    ticker(t, 1760, 1);
+    ctx.restore();
+  }
+
+  // ===== CTA =====
+  if (t >= T_CTA) {
+    const lt = t - T_CTA;
+    // blurred montage background + brand tint
+    ctx.drawImage(BLUR.lt305, 0, 0, W, H);
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, 'rgba(11,77,255,.55)'); bg.addColorStop(1, 'rgba(5,20,90,.85)');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    logo(W / 2, 120, 92, { alpha: seg(lt, 0, .3) });
+    text('Barchasi bitta joyda!', W / 2, 225, { size: 60, weight: 900, color: '#fff', alpha: seg(lt, .1, .4) });
+    // 2x2 grid with prices
+    PRODUCTS.forEach((p, i) => {
+      const k = seg(lt, .15 + i * .1, .5 + i * .1);
+      if (k <= 0) return;
+      const tw = 450, th = 440, gx = 70 + (i % 2) * (tw + 40), gy = 300 + Math.floor(i / 2) * (th + 24);
+      ctx.save(); ctx.translate(gx + tw / 2, gy + th / 2); const s = backOut(k) * (1 + (Math.floor(lt / BEAT) % 4 === i) * beatPulse(t) * .03); ctx.scale(s, s); ctx.translate(-(gx + tw / 2), -(gy + th / 2));
+      ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12;
+      rr(gx, gy, tw, th, 24); ctx.fillStyle = '#fff'; ctx.fill(); ctx.shadowColor = 'transparent';
+      ctx.save(); rr(gx, gy, tw, th, 24); ctx.clip(); ctx.beginPath(); ctx.rect(gx, gy, tw, th - 96); ctx.clip();
+      photoCover(IMG[p.id], gx, gy, tw, th - 96, 1.0, IMG[p.id].width / 2, IMG[p.id].height * .45);
+      ctx.restore();
+      text(`${p.brand === 'FERRE' ? 'Ferre' : 'Lifetech'} ${p.model}`, gx + tw / 2, gy + th - 70, { size: 32, weight: 700, color: '#4A5263' });
+      text(`${fmt(p.price)} soʻm`, gx + tw / 2, gy + th - 30, { size: 42, weight: 900, color: RED });
+      ctx.restore();
+    });
+    pill('3 · 6 · 9 · 12 oyga muddatli toʻlov', W / 2, 1268, { size: 44, bg: YEL, fg: INK, scale: backOut(seg(lt, .7, 1.0)), weight: 900 });
+    text('Kelib koʻring! Qoʻngʻiroq qiling:', W / 2, 1375, { size: 46, weight: 800, color: '#fff', alpha: seg(lt, .9, 1.2) });
+    phoneButton(PHONES[0], W / 2, 1490, seg(lt, 1.0, 1.35), t, 0);
+    phoneButton(PHONES[1], W / 2, 1650, seg(lt, 1.2, 1.55), t, .5);
+    text('AVERON — sifat va qulay narx!', W / 2, 1780, { size: 46, weight: 800, color: YEL, alpha: seg(lt, 1.5, 1.8) });
+  }
+
+  // ===== transitions =====
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  flash(seg(t, 1.0, 1.2));
+  for (let i = 0; i <= PRODUCTS.length; i++) flash(seg(t, T_PROD0 + i * PROD_LEN, T_PROD0 + i * PROD_LEN + .18), .6);
+  // fade out the last 0.4 s to black is avoided on purpose: end card stays readable
+}
+
+window.drawFrame = drawFrame;
+window.DUR = DUR;
+window.ready = (async () => {
+  for (const wgt of [900, 800, 700, 600]) await document.fonts.load(`${wgt} 100px ${FONT}`);
+  for (const p of PRODUCTS) { IMG[p.id] = await load(`photos/${p.id}.jpg`); BLUR[p.id] = makeBlur(IMG[p.id]); }
+  drawFrame(0);
+  return true;
+})();
+if (!navigator.webdriver) {
+  const t0 = performance.now();
+  const loop = () => { drawFrame(((performance.now() - t0) / 1000) % DUR); requestAnimationFrame(loop); };
+  window.ready.then(() => requestAnimationFrame(loop));
+}
+</script>
+</body>
+</html>
