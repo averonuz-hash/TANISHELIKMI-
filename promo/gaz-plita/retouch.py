@@ -8,8 +8,13 @@ import sys
 import cv2
 import numpy as np
 
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "source")
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "photos")
+import argparse
+_ap = argparse.ArgumentParser()
+_ap.add_argument("--src", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "source"))
+_ap.add_argument("--out", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "photos"))
+_ap.add_argument("--size", type=int, default=1500, help="output square size in px (3000 = full resolution, for 4K)")
+ARGS = _ap.parse_args()
+SRC, OUT, SIZE = ARGS.src, ARGS.out, ARGS.size
 os.makedirs(OUT, exist_ok=True)
 
 PHOTOS = {
@@ -68,7 +73,7 @@ def build(name):
     cx0, cy0, cx1, cy1 = [int(v * k) for v in crop]
     out = out[cy0:cy1, cx0:cx1]
     out = cv2.convertScaleAbs(out, alpha=1.08, beta=4)
-    out = cv2.resize(out, (1500, 1500), interpolation=cv2.INTER_AREA)
+    out = cv2.resize(out, (SIZE, SIZE), interpolation=cv2.INTER_AREA)
     cv2.imwrite(os.path.join(OUT, f"{name}.jpg"), out, [cv2.IMWRITE_JPEG_QUALITY, 93])
     return out
 

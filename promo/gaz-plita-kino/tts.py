@@ -20,7 +20,7 @@ PROXY = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VOICE = "uz-UZ-MadinaNeural"
-PITCH = "+18Hz"   # younger, girl-like timbre
+PITCH = "+12Hz"   # slightly younger timbre; kept small so the voice stays natural
 RATE = "-6%"
 
 LINES = json.load(open(os.path.join(HERE, "voiceover.json"), encoding="utf-8"))
