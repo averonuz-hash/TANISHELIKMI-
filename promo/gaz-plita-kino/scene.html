@@ -1,0 +1,452 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AVERON — Oyimga sovgʻa</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #000; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+/*
+ * "Oyimga sovgʻa" — cinematic AVERON gas-stove spot, narrated by a girl.
+ * Deterministic renderer: window.drawFrame(t). 1080x1920, timing from timeline.json + voiceover.json.
+ * Served over http by render.js (so photos don't taint the canvas).
+ */
+const W = 1080, H = 1920, BAR = 130;           // letterbox bars
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const GOLD = '#E9C77B', GOLD_D = '#B8893B', INK = '#0A0B0F';
+const FONT = 'Inter';
+const PHONES = ['50-772-25-00', '77-200-85-04'];
+const PRODUCTS = {
+  lt110: { name: 'LIFETECH LT-110', sub: 'Oltin rang oynali eshik', price: 2099999, m12: 249999 },
+  lt305: { name: 'LIFETECH LT-305', sub: 'Toʻq kulrang', price: 2399999, m12: 289999 },
+  lt265: { name: 'LIFETECH LT-265', sub: 'Och kulrang', price: 2399999, m12: 289999 },
+  ferre: { name: 'FERRE BT60-F31', sub: 'Energiya sinfi A', price: 2499999, m12: 299999 },
+};
+const ORDER = ['lt110', 'lt305', 'lt265', 'ferre'];
+let TL = null, VO = null, VOLEN = {};
+
+// ---------- helpers ----------
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = k => 1 - Math.pow(1 - k, 3);
+const easeInOut = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const win = (t, a, b, fi = .4, fo = .4) => Math.min(seg(t, a, a + fi), 1 - seg(t, b - fo, b));
+function rand(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+const fmt = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+function rr(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath(); ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function text(str, x, y, { size = 60, weight = 400, color = '#fff', align = 'center', spacing = 0, alpha = 1, italic = false, shadow = null, fill = null } = {}) {
+  if (alpha <= 0) return;
+  ctx.save(); ctx.globalAlpha *= alpha;
+  ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${FONT}`; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.letterSpacing = spacing + 'px';
+  if (shadow) { ctx.shadowColor = shadow.c; ctx.shadowBlur = shadow.b; ctx.shadowOffsetY = shadow.y || 0; }
+  ctx.fillStyle = fill || color; ctx.fillText(str, x, y); ctx.restore();
+}
+function measure(str, size, weight = 400, spacing = 0) {
+  ctx.save(); ctx.font = `${weight} ${size}px ${FONT}`; ctx.letterSpacing = spacing + 'px';
+  const w = ctx.measureText(str).width; ctx.restore(); return w;
+}
+function goldFill(y, h) {
+  const g = ctx.createLinearGradient(0, y - h / 2, 0, y + h / 2);
+  g.addColorStop(0, '#FFF1C9'); g.addColorStop(.45, GOLD); g.addColorStop(1, GOLD_D);
+  return g;
+}
+
+// ---------- assets ----------
+const IMG = {}, FEATHER = {};
+let GRAIN = [];
+function load(src) { return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
+function makeFeather(im) { // photo with soft top/bottom/side edges for the "full stove" framing
+  const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+  const x = c.getContext('2d'); x.drawImage(im, 0, 0);
+  x.globalCompositeOperation = 'destination-in';
+  let g = x.createLinearGradient(0, 0, 0, c.height);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.12, 'rgba(0,0,0,1)'); g.addColorStop(.86, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
+  g = x.createLinearGradient(0, 0, c.width, 0);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.05, 'rgba(0,0,0,1)'); g.addColorStop(.95, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+// whole stove visible: blurred dark backdrop + feathered sharp photo, width-fitted, centred at cy
+function stage(id, { z = 1, cy = 790, blur = 0, exp = 1, dx = 0, bgExp = .38 } = {}) {
+  shot(IMG[id], { z: 1.5, blur: 34, exp: bgExp });
+  const im = FEATHER[id], w = W * 1.08 * z, h = w * im.height / im.width;
+  ctx.save();
+  ctx.filter = `blur(${blur.toFixed(1)}px) brightness(${exp.toFixed(3)}) contrast(1.12) saturate(1.08)`;
+  ctx.drawImage(im, W / 2 - w / 2 + dx, cy - h / 2, w, h);
+  ctx.filter = 'none'; ctx.restore();
+}
+function makeGrain() {
+  const out = [], r = rand(77);
+  for (let k = 0; k < 6; k++) {
+    const c = document.createElement('canvas'); c.width = 540; c.height = 960;
+    const x = c.getContext('2d'), d = x.createImageData(540, 960);
+    for (let i = 0; i < d.data.length; i += 4) { const v = 128 + (r() - .5) * 120; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+    x.putImageData(d, 0, 0); out.push(c);
+  }
+  return out;
+}
+
+// photo with cinematic camera: zoom z around focus (fx, fy as 0..1), blur (rack focus), exposure
+function shot(im, { z = 1, fx = .5, fy = .5, blur = 0, exp = 1, x = 0, y = BAR, w = W, h = H - 2 * BAR } = {}) {
+  const s = Math.max(w / im.width, h / im.height) * z;
+  let ox = x + w / 2 - fx * im.width * s, oy = y + h / 2 - fy * im.height * s;
+  ox = Math.min(x, Math.max(x + w - im.width * s, ox)); oy = Math.min(y, Math.max(y + h - im.height * s, oy));
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.filter = `blur(${blur.toFixed(1)}px) brightness(${exp.toFixed(3)}) contrast(1.12) saturate(1.08)`;
+  ctx.drawImage(im, ox, oy, im.width * s, im.height * s);
+  ctx.filter = 'none';
+  ctx.restore();
+  return { s, ox, oy };
+}
+// teal shadows / warm highlights + vignette
+function grade(warm = .5, y = BAR, h = H - 2 * BAR) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'soft-light';
+  ctx.fillStyle = 'rgba(20,70,90,.55)'; ctx.fillRect(0, y, W, h);
+  ctx.globalCompositeOperation = 'soft-light';
+  const g = ctx.createRadialGradient(W * .7, y + h * .3, 50, W * .5, y + h * .5, h * .8);
+  g.addColorStop(0, `rgba(255,170,80,${.65 * warm})`); g.addColorStop(1, 'rgba(255,140,60,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, y, W, h);
+  ctx.globalCompositeOperation = 'source-over';
+  const v = ctx.createRadialGradient(W / 2, y + h / 2, h * .25, W / 2, y + h / 2, h * .75);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.62)');
+  ctx.fillStyle = v; ctx.fillRect(0, y, W, h);
+  ctx.restore();
+}
+function lightLeak(t, k, cx = .85, cy = .25) {
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = k;
+  const x = W * cx + Math.sin(t * .7) * 120, y = BAR + (H - 2 * BAR) * cy + Math.cos(t * .5) * 80;
+  const g = ctx.createRadialGradient(x, y, 10, x, y, 700);
+  g.addColorStop(0, 'rgba(255,190,110,.85)'); g.addColorStop(.4, 'rgba(255,110,50,.35)'); g.addColorStop(1, 'rgba(255,80,40,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.restore();
+}
+function flare(x, y, k, color = '120,170,255') { // anamorphic streak
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = k;
+  const g = ctx.createLinearGradient(0, 0, W, 0);
+  g.addColorStop(0, `rgba(${color},0)`); g.addColorStop(.5, `rgba(${color},.9)`); g.addColorStop(1, `rgba(${color},0)`);
+  ctx.fillStyle = g; ctx.fillRect(0, y - 3, W, 6);
+  ctx.globalAlpha = k * .5; ctx.fillRect(0, y - 14, W, 28);
+  const r = ctx.createRadialGradient(x, y, 2, x, y, 160);
+  r.addColorStop(0, `rgba(${color},.8)`); r.addColorStop(1, `rgba(${color},0)`);
+  ctx.globalAlpha = k; ctx.fillStyle = r; ctx.fillRect(x - 160, y - 160, 320, 320);
+  ctx.restore();
+}
+function bokeh(t, seed, k, color = '255,200,120', n = 26) {
+  if (k <= 0) return;
+  const r = rand(seed);
+  ctx.save(); ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < n; i++) {
+    const x0 = r() * W, sp = 20 + r() * 50, rad = 10 + r() * 38, ph = r() * 50;
+    const y = H - BAR - ((t * sp + ph * 40) % (H - 2 * BAR));
+    const x = x0 + Math.sin(t * .8 + i) * 30;
+    const a = k * (.15 + .25 * r()) * (.6 + .4 * Math.sin(t * 2 + i));
+    const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+    g.addColorStop(0, `rgba(${color},${a})`); g.addColorStop(.7, `rgba(${color},${a * .6})`); g.addColorStop(1, `rgba(${color},0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad, 0, 7); ctx.fill();
+  }
+  ctx.restore();
+}
+function steam(t, cx, cy, k) {
+  if (k <= 0) return;
+  const r = rand(31);
+  ctx.save(); ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 18; i++) {
+    const life = (t * .35 + r()) % 1, x = cx + (r() - .5) * 260 + Math.sin(t + i) * 40 * life, y = cy - life * 700;
+    const rad = 60 + life * 180, a = k * .10 * Math.sin(life * Math.PI);
+    const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+    g.addColorStop(0, `rgba(230,235,245,${a})`); g.addColorStop(1, 'rgba(230,235,245,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+  ctx.restore();
+}
+
+// ---------- gas burner close-up ----------
+function burner(cx, cy, R, t, ign) {
+  const sy = .45;
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(1, sy);
+  ctx.strokeStyle = '#191b20'; ctx.lineWidth = 34; ctx.lineCap = 'round';
+  for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; ctx.beginPath(); ctx.moveTo(Math.cos(a) * R * 1.4, Math.sin(a) * R * 1.4); ctx.lineTo(Math.cos(a) * R * 3.4, Math.sin(a) * R * 3.4); ctx.stroke(); }
+  let g = ctx.createRadialGradient(-R * .3, -R * .3, 5, 0, 0, R * 1.25);
+  g.addColorStop(0, '#4c5058'); g.addColorStop(1, '#101215');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R * 1.18, 0, 7); ctx.fill();
+  g = ctx.createRadialGradient(-R * .25, -R * .35, 4, 0, 0, R * .8);
+  g.addColorStop(0, '#3e434b'); g.addColorStop(1, '#0c0d10');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R * .78, 0, 7); ctx.fill();
+  ctx.restore();
+  if (ign <= 0) return;
+  // flame light on the cooktop
+  g = ctx.createRadialGradient(cx, cy, R * .3, cx, cy, R * 3.6);
+  g.addColorStop(0, `rgba(70,120,255,${.5 * ign})`); g.addColorStop(1, 'rgba(20,40,120,0)');
+  ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = g; ctx.fillRect(cx - R * 3.6, cy - R * 3.6, R * 7.2, R * 7.2);
+  ctx.globalCompositeOperation = 'lighter';
+  const n = 40, r = rand(9);
+  for (let pass = 0; pass < 2; pass++) for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2, back = Math.sin(a) < 0;
+    if ((pass === 0) !== back) continue;
+    const ph = r() * 10, fl = .72 + .28 * Math.sin(t * 21 + ph) * Math.sin(t * 13 + ph * 2);
+    const len = R * (.38 + .2 * fl) * ign, bx = cx + Math.cos(a) * R * .92, by = cy + Math.sin(a) * R * .92 * sy;
+    const ox = Math.cos(a) * len * .5, oy = Math.sin(a) * len * .5 * sy - len * .8, wdt = R * .075;
+    const grad = ctx.createLinearGradient(bx, by, bx + ox, by + oy);
+    grad.addColorStop(0, `rgba(180,220,255,${.95 * ign})`); grad.addColorStop(.35, `rgba(60,130,255,${.75 * ign})`); grad.addColorStop(1, 'rgba(30,60,255,0)');
+    ctx.fillStyle = grad;
+    const nx = -oy, ny = ox, nl = Math.hypot(nx, ny) || 1;
+    ctx.beginPath();
+    ctx.moveTo(bx + nx / nl * wdt, by + ny / nl * wdt);
+    ctx.quadraticCurveTo(bx + ox * .5 + nx / nl * wdt * 1.2, by + oy * .5 + ny / nl * wdt * 1.2, bx + ox, by + oy);
+    ctx.quadraticCurveTo(bx + ox * .5 - nx / nl * wdt * 1.2, by + oy * .5 - ny / nl * wdt * 1.2, bx - nx / nl * wdt, by - ny / nl * wdt);
+    ctx.closePath(); ctx.globalAlpha = back ? .55 : 1; ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ---------- overlays ----------
+function letterbox() {
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, BAR); ctx.fillRect(0, H - BAR, W, BAR);
+}
+function filmGrain(t) {
+  const g = GRAIN[Math.floor(t * 24) % GRAIN.length];
+  ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = .10;
+  ctx.drawImage(g, 0, 0, W, H); ctx.restore();
+}
+function subtitles(t) {
+  let scrim = 0;
+  for (const v of VO) { const s = TL.vo[v.id], e = s + VOLEN[v.id]; if (!v.nosub) scrim = Math.max(scrim, win(t, s - .3, e + .6, .3, .4)); }
+  if (scrim > 0) {
+    const g = ctx.createLinearGradient(0, H - BAR - 360, 0, H - BAR);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(0,0,0,${.7 * scrim})`);
+    ctx.fillStyle = g; ctx.fillRect(0, H - BAR - 360, W, 360);
+  }
+  for (const v of VO) {
+    if (v.nosub) continue;
+    const s = TL.vo[v.id], e = s + VOLEN[v.id];
+    const a = win(t, s - .1, e + .35, .15, .25);
+    if (a <= 0) continue;
+    // wrap into max two lines
+    const words = v.sub.split(' '), lines = [];
+    let cur = '';
+    for (const w of words) { const nxt = cur ? cur + ' ' + w : w; if (measure(nxt, 44, 500) > 900 && cur) { lines.push(cur); cur = w; } else cur = nxt; }
+    lines.push(cur);
+    lines.forEach((l, i) => text(l, W / 2, H - BAR - 150 + (i - (lines.length - 1)) * 58, { size: 44, weight: 500, color: '#fff', alpha: a, shadow: { c: 'rgba(0,0,0,.95)', b: 14, y: 2 } }));
+  }
+}
+function fade(k) { if (k <= 0) return; ctx.save(); ctx.globalAlpha = clamp(k); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+function lowerThird(p, t, a, b) {
+  const k = easeOut(seg(t, a + .15, a + .6)), o = win(t, a, b, .3, .25);
+  if (o <= 0) return;
+  ctx.save(); ctx.globalAlpha = o;
+  const y = 1430;
+  ctx.fillStyle = GOLD; ctx.fillRect(W / 2 - 160 * k, y - 78, 320 * k, 3);
+  text(p.name, W / 2, y - 28, { size: 50, weight: 300, color: '#fff', spacing: 10 * k + 2 });
+  text(p.sub, W / 2, y + 24, { size: 32, weight: 400, color: 'rgba(255,255,255,.75)', spacing: 3, italic: true });
+  const pk = easeOut(seg(t, a + .35, a + .8));
+  text(`${fmt(p.price)} soʻm`, W / 2, y + 100, { size: 74, weight: 700, spacing: 1, alpha: pk, fill: goldFill(y + 100, 74), shadow: { c: 'rgba(0,0,0,.7)', b: 20, y: 4 } });
+  ctx.restore();
+}
+
+// ---------- frame ----------
+function drawFrame(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  const S = TL.shots;
+  // subtle gate weave
+  ctx.translate(Math.sin(t * 13) * 1.2, Math.cos(t * 11) * 1.2);
+
+  // ===== 1. flame in the dark =====
+  if (t < S.flame[1] + .5) {
+    const ign = easeOut(seg(t, .6, 1.1));
+    const z = lerp(1.0, 1.18, easeInOut(seg(t, 0, S.flame[1] + .5)));
+    ctx.save(); ctx.translate(W / 2, 1050); ctx.scale(z, z); ctx.translate(-W / 2, -1050);
+    const g = ctx.createRadialGradient(W / 2, 1050, 60, W / 2, 1050, 1000);
+    g.addColorStop(0, '#16181d'); g.addColorStop(1, '#040506');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    burner(W / 2, 1050, 230, t, ign);
+    ctx.restore();
+    flare(W / 2, 1000, ign * (.55 + .15 * Math.sin(t * 9)) * (1 - seg(t, 4.2, 5.4)));
+    steam(t, W / 2, 900, seg(t, 1.5, 3));
+    grade(.25);
+    fade(1 - seg(t, .2, .9) + seg(t, S.flame[1] - .3, S.flame[1] + .2) * 0);
+  }
+
+  // ===== 2. macro: knobs, rack focus =====
+  if (t >= S.knobs[0] - .4 && t < S.knobs[1] + .4) {
+    const lt = t - S.knobs[0], L = S.knobs[1] - S.knobs[0];
+    const blur = lerp(18, 0, easeOut(seg(lt, 0, 1.4))) + lerp(0, 10, seg(lt, L - .3, L + .4));
+    shot(IMG.lt265, { z: 2.6, fx: lerp(.30, .62, easeInOut(seg(lt, 0, L))), fy: .16, blur, exp: .92 });
+    grade(.9);
+    lightLeak(t, .35 + .15 * Math.sin(t));
+    fade(win(t, S.knobs[0] - .4, S.knobs[1] + .4, .4, .4) < 1 ? 1 - win(t, S.knobs[0] - .4, S.knobs[1] + .4, .4, .4) : 0);
+  }
+
+  // ===== 3. reveal: gold door in the dark, light sweep =====
+  if (t >= S.reveal[0] - .4 && t < S.reveal[1] + .1) {
+    const lt = t - S.reveal[0], L = S.reveal[1] - S.reveal[0];
+    shot(IMG.lt110, { z: lerp(1.9, 1.55, easeInOut(seg(lt, 0, L))), fx: .42, fy: .36, blur: lerp(8, 1.5, easeOut(seg(lt, 0, 1.8))), exp: lerp(.35, .95, easeOut(seg(lt, .2, 2.0))) });
+    grade(1);
+    // light sweep across the gold door
+    ctx.save(); ctx.globalCompositeOperation = 'screen';
+    const sx = lerp(-300, W + 300, easeInOut(seg(lt, .3, 2.6)));
+    const g = ctx.createLinearGradient(sx - 200, 0, sx + 200, 0);
+    g.addColorStop(0, 'rgba(255,220,150,0)'); g.addColorStop(.5, 'rgba(255,220,150,.45)'); g.addColorStop(1, 'rgba(255,220,150,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, BAR, W, H - 2 * BAR); ctx.restore();
+    bokeh(t, 5, .6);
+    fade(1 - seg(t, S.reveal[0] - .4, S.reveal[0] + .3) + seg(t, S.reveal[1] - .35, S.reveal[1]));
+  }
+
+  // ===== 4. title card =====
+  if (t >= S.title[0] && t < S.title[1] + .2) {
+    const lt = t - S.title[0];
+    const k = easeOut(seg(lt, .05, .7)), z = lerp(1.0, 1.05, seg(lt, 0, 1.4));
+    ctx.save(); ctx.translate(W / 2, 900); ctx.scale(z, z);
+    text('AVERON TAQDIM ETADI', 0, -170, { size: 30, weight: 400, color: 'rgba(255,255,255,.7)', spacing: 12, alpha: k });
+    text('OYIMGA', 0, -30, { size: 130, weight: 200, spacing: lerp(40, 22, k), alpha: k, fill: goldFill(-30, 130) });
+    text('SOVGʻA', 0, 120, { size: 130, weight: 200, spacing: lerp(40, 22, k), alpha: k, fill: goldFill(120, 130) });
+    ctx.restore();
+    flare(W / 2, 960, (1 - seg(lt, 0, .9)) * .9, '255,200,130');
+    fade(seg(t, S.title[1] - .15, S.title[1] + .05));
+  }
+
+  // ===== 5. products =====
+  ORDER.forEach((id, i) => {
+    const [a, b] = S[id];
+    if (t < a - .05 || t >= b + .05) return;
+    const lt = t - a, L = b - a;
+    const dir = i % 2 ? -1 : 1;
+    stage(id, { z: lerp(1.0, 1.06, easeOut(seg(lt, 0, L))), dx: dir * lerp(30, -10, easeOut(seg(lt, 0, L))), blur: lerp(10, 0, easeOut(seg(lt, 0, .45))) });
+    grade(.7);
+    lightLeak(t, .25 * (1 - seg(lt, 0, .6)) + .12, i % 2 ? .1 : .9, .2);
+    lowerThird(PRODUCTS[id], t, a, b);
+    fade(1 - seg(lt, 0, .12));
+  });
+
+  // ===== 6. grid with prices =====
+  if (t >= S.grid[0] - .05 && t < S.grid[1] + .3) {
+    const lt = t - S.grid[0], L = S.grid[1] - S.grid[0];
+    shot(IMG.lt305, { z: 1.4, blur: 26, exp: .45 });
+    grade(.6);
+    const tw = 440, th = 440;
+    ORDER.forEach((id, i) => {
+      const k = easeOut(seg(lt, .1 + i * .15, .7 + i * .15));
+      const gx = 80 + (i % 2) * (tw + 40), gy = 250 + Math.floor(i / 2) * (th + 90) + (1 - k) * 60;
+      ctx.save(); ctx.globalAlpha = k;
+      ctx.save(); rr(gx, gy, tw, th, 18); ctx.clip();
+      shot(IMG[id], { x: gx, y: gy, w: tw, h: th, z: lerp(1.0, 1.08, seg(lt, 0, L)), fy: .45 });
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(233,199,123,.6)'; ctx.lineWidth = 2; rr(gx, gy, tw, th, 18); ctx.stroke();
+      text(PRODUCTS[id].name, gx + tw / 2, gy + th + 26, { size: 24, weight: 400, color: 'rgba(255,255,255,.8)', spacing: 4 });
+      text(`${fmt(PRODUCTS[id].price)} soʻm`, gx + tw / 2, gy + th + 62, { size: 40, weight: 700, fill: goldFill(gy + th + 62, 40) });
+      ctx.restore();
+    });
+    // "dan" headline under the grid
+    const hk = easeOut(seg(lt, 1.6, 2.4));
+    text('narxi atigi', W / 2, 1335, { size: 36, weight: 300, color: '#fff', spacing: 8, alpha: hk });
+    text('2.099.999 soʻmdan', W / 2, 1405, { size: 76, weight: 800, alpha: hk, fill: goldFill(1405, 76), shadow: { c: 'rgba(0,0,0,.6)', b: 18, y: 4 } });
+    const ik = easeOut(seg(lt, 5.4, 6.0));
+    if (ik > 0) {
+      ctx.save(); ctx.globalAlpha = ik;
+      const s = 'NAQD YOKI 12 OYGA BOʻLIB TOʻLASH', w = measure(s, 32, 600, 4) + 70;
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 2; rr(W / 2 - w / 2, 1478 - 34, w, 68, 34); ctx.stroke();
+      text(s, W / 2, 1480, { size: 32, weight: 600, color: GOLD, spacing: 4 });
+      ctx.restore();
+    }
+    fade(1 - seg(t, S.grid[0] - .05, S.grid[0] + .35) + seg(t, S.grid[1] - .3, S.grid[1] + .1));
+  }
+
+  // ===== 7. hero: "Oyijonim... bu sizga!" =====
+  if (t >= S.hero[0] - .1 && t < S.hero[1] + .3) {
+    const lt = t - S.hero[0], L = S.hero[1] - S.hero[0];
+    stage('lt110', { z: lerp(1.0, 1.07, easeInOut(seg(lt, 0, L))), blur: lerp(4, 0, seg(lt, 0, 1)), exp: 1.05, bgExp: .45 });
+    grade(1.2);
+    lightLeak(t, .55, .5, .55);
+    bokeh(t, 12, .95, '255,205,130', 34);
+    const k = easeOut(seg(t, TL.vo['09'] + .1, TL.vo['09'] + 1.0));
+    text('Oyijonim, bu sizga!', W / 2, 1440, { size: 84, weight: 300, italic: true, alpha: k, fill: goldFill(1440, 84), shadow: { c: 'rgba(0,0,0,.7)', b: 24, y: 4 } });
+    fade(1 - seg(t, S.hero[0] - .1, S.hero[0] + .5) + seg(t, S.hero[1] - .3, S.hero[1] + .1));
+  }
+
+  // ===== 8. end card =====
+  if (t >= S.cta[0]) {
+    const lt = t - S.cta[0];
+    shot(IMG.lt110, { z: 1.5, blur: 30, exp: .32 });
+    grade(.8);
+    bokeh(t, 21, .5, '255,205,130', 20);
+    const k1 = easeOut(seg(lt, .2, 1.0));
+    // logo
+    const sp = 18, lw = measure('AVERON', 120, 300, sp);
+    text('AVERON', W / 2 + sp / 2, 330, { size: 120, weight: 300, spacing: sp, alpha: k1, fill: goldFill(330, 120) });
+    ctx.save(); ctx.globalAlpha = k1; ctx.fillStyle = GOLD; ctx.fillRect(W / 2 - lw / 2 * k1, 410, lw * k1, 2); ctx.restore();
+    text('Hammasi bitta joyda', W / 2, 460, { size: 36, weight: 300, italic: true, color: 'rgba(255,255,255,.85)', alpha: easeOut(seg(lt, .6, 1.2)) });
+    // four small tiles
+    ORDER.forEach((id, i) => {
+      const k = easeOut(seg(lt, .6 + i * .12, 1.2 + i * .12));
+      const tw = 205, gx = 70 + i * (tw + 18), gy = 560;
+      ctx.save(); ctx.globalAlpha = k;
+      ctx.save(); rr(gx, gy, tw, tw, 14); ctx.clip(); shot(IMG[id], { x: gx, y: gy, w: tw, h: tw, fy: .45 }); ctx.restore();
+      ctx.strokeStyle = 'rgba(233,199,123,.5)'; ctx.lineWidth = 2; rr(gx, gy, tw, tw, 14); ctx.stroke();
+      text(fmt(PRODUCTS[id].price), gx + tw / 2, gy + tw + 34, { size: 30, weight: 700, fill: goldFill(gy + tw + 34, 30) });
+      ctx.restore();
+    });
+    const k2 = easeOut(seg(lt, 1.6, 2.2));
+    text('3 · 6 · 9 · 12 OYGA MUDDATLI TOʻLOV', W / 2, 900, { size: 32, weight: 500, color: '#fff', spacing: 5, alpha: k2 });
+    // phones: elegant gold outline buttons
+    PHONES.forEach((ph, i) => {
+      const k = easeOut(seg(lt, 2.2 + i * .3, 2.8 + i * .3));
+      if (k <= 0) return;
+      const y = 1060 + i * 150, bw = 760, bh = 112;
+      const glow = .5 + .5 * Math.sin(t * 3 + i);
+      ctx.save(); ctx.globalAlpha = k;
+      ctx.shadowColor = `rgba(233,199,123,${.35 * glow})`; ctx.shadowBlur = 30;
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 3; rr(W / 2 - bw / 2, y - bh / 2, bw, bh, bh / 2); ctx.stroke();
+      ctx.shadowColor = 'transparent';
+      ctx.fillStyle = 'rgba(233,199,123,.08)'; ctx.fill();
+      text(ph, W / 2, y + 3, { size: 66, weight: 600, color: '#fff', spacing: 3 });
+      ctx.restore();
+    });
+    const k3 = easeOut(seg(t, TL.vo['11'], TL.vo['11'] + .8));
+    text('Sifat va qulay narx', W / 2, 1420, { size: 58, weight: 300, italic: true, alpha: k3, fill: goldFill(1420, 58) });
+    fade(1 - seg(t, S.cta[0], S.cta[0] + .6) + seg(t, TL.dur - .8, TL.dur));
+  }
+
+  // ===== global overlays =====
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  filmGrain(t);
+  letterbox();
+  subtitles(t);
+}
+
+window.drawFrame = drawFrame;
+window.ready = (async () => {
+  for (const wgt of [800, 700, 600, 500, 400, 300, 200]) { await document.fonts.load(`${wgt} 100px ${FONT}`); await document.fonts.load(`italic ${wgt} 100px ${FONT}`); }
+  TL = await (await fetch('timeline.json')).json();
+  VO = await (await fetch('voiceover.json')).json();
+  VOLEN = await (await fetch('vo_wav/lengths.json')).json();
+  window.DUR = TL.dur;
+  for (const id of ORDER) { IMG[id] = await load(`photos/${id}.jpg`); FEATHER[id] = makeFeather(IMG[id]); }
+  GRAIN = makeGrain();
+  drawFrame(0);
+  return true;
+})();
+if (!navigator.webdriver) {
+  window.ready.then(() => {
+    const t0 = performance.now();
+    const loop = () => { drawFrame(((performance.now() - t0) / 1000) % TL.dur); requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
+  });
+}
+</script>
+</body>
+</html>
