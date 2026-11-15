@@ -1,13 +1,13 @@
-# AVERON — MEDIA MF0116 promo video (9:16, 20 s)
+# AVERON — MIDEA MF0116 promo video (9:16, 20 s)
 
-**Final video:** `AVERON_MEDIA_MF0116_promo_9x16.mp4` (1080×1920, 30 fps, H.264 + AAC, -14 LUFS, ready for Instagram Reels / TikTok / YouTube Shorts / Telegram).
+**Final video:** `AVERON_MIDEA_MF0116_promo_9x16.mp4` (1080×1920, 30 fps, H.264 + AAC, -14 LUFS, ready for Instagram Reels / TikTok / YouTube Shorts / Telegram).
 
 ## Storyboard
 
 | Time | Scene | On-screen text (Uzbek) |
 |---|---|---|
 | 0–2 s | Logo slam on a blue disk, rings and sparkles, then a blue swipe | **AVERON** · YANGI TAKLIF! · maishiy texnika doʻkoni |
-| 2–7 s | White automatic washing machine flies in, turning slowly on a clean white background, drum spinning with water and clothes | **MEDIA MF0116** · Avtomatik kir yuvish mashinasi |
+| 2–7 s | White automatic washing machine flies in, turning slowly on a clean white background, drum spinning with water and clothes | **MIDEA MF0116** · Avtomatik kir yuvish mashinasi |
 | 7–10.5 s | Feature chips slide in | Zamonaviy dizayn · Avtomatik rejimlar · Oson boshqaruv |
 | 10.5–14 s | Price counts up and slams in on the beat | NAQD PULGA · **3 199 000 soʻm** |
 | 14–17 s | Installment price zooms in | 12 OYGA MUDDATLI TOʻLOV · **379 000 soʻm / oyiga** |
@@ -22,7 +22,7 @@ python3 music.py                 # -> out/music.wav
 node render.js                   # -> out/video_silent.mp4  (needs Playwright + Chromium + ffmpeg)
 ffmpeg -y -i out/video_silent.mp4 -i out/music.wav -c:v copy \
   -af "loudnorm=I=-14:TP=-1.0:LRA=9" -ar 48000 -c:a aac -b:a 192k -shortest \
-  -movflags +faststart AVERON_MEDIA_MF0116_promo_9x16.mp4
+  -movflags +faststart AVERON_MIDEA_MF0116_promo_9x16.mp4
 ```
 
 - Change text, prices, colors, or timings in `scene.html` (the `S` scene table and the `BLUE/RED/YEL` constants).
@@ -42,4 +42,4 @@ AI generators often misspell on-screen text and numbers. Generate the **product 
 **Oʻzbekcha (qisqa):**
 > Vertikal 9:16 reklama videosi. Zamonaviy oq avtomatik kir yuvish mashinasi toza oq fonda sekin aylanmoqda, yorqin studiya yoritilishi, eshik oynasi orqali kiyimlar aylanayotgani koʻrinadi. Matnsiz, logotipsiz.
 
-**Text overlays to add in the editor:** `MEDIA MF0116` → `3 199 000 soʻm` (naqd) → `379 000 soʻm / oyiga · 12 oy` → `HOZIROQ QOʻNGʻIROQ QILING! 50-772-25-00` → `AVERON`.
+**Text overlays to add in the editor:** `MIDEA MF0116` → `3 199 000 soʻm` (naqd) → `379 000 soʻm / oyiga · 12 oy` → `HOZIROQ QOʻNGʻIROQ QILING! 50-772-25-00` → `AVERON`.

@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>AVERON — MEDIA MF0116</title>
+<title>AVERON — MIDEA MF0116</title>
 <style>
   html, body { margin: 0; padding: 0; background: #fff; }
   canvas { display: block; }
@@ -12,7 +12,7 @@
 <canvas id="c" width="1080" height="1920"></canvas>
 <script>
 /*
- * AVERON promo — MEDIA MF0116 washing machine.
+ * AVERON promo — MIDEA MF0116 washing machine.
  * Deterministic renderer: window.drawFrame(t) paints the frame at time t (seconds).
  * 1080x1920 (9:16), 20 s. Music is 120 BPM -> beat = 0.5 s, bar = 2 s.
  *
@@ -421,7 +421,7 @@ function drawFrame(t) {
       const k1 = easeOut(seg(t, S.product[0] + .3, S.product[0] + .8));
       const k2 = easeOut(seg(t, S.product[0] + .45, S.product[0] + .95));
       ctx.save(); ctx.globalAlpha = a;
-      text('MEDIA', W / 2 - (1 - k1) * 600, 250, { size: 150, weight: 900, color: INK, spacing: 6 });
+      text('MIDEA', W / 2 - (1 - k1) * 600, 250, { size: 150, weight: 900, color: INK, spacing: 6 });
       // MF0116 in blue box
       const bw = measure('MF0116', 110, 900, 4) + 70;
       ctx.save(); ctx.translate(W / 2 + (1 - k2) * 700, 395); ctx.rotate(-.03);
@@ -543,7 +543,7 @@ function drawFrame(t) {
       ctx.restore();
     }
     const k4 = seg(t, S.cta[0] + 1.1, S.cta[0] + 1.4);
-    text('MEDIA MF0116  •  AVERON', W / 2, 1620, { size: 40, weight: 700, color: 'rgba(255,255,255,.85)', spacing: 4, alpha: k4 });
+    text('MIDEA MF0116  •  AVERON', W / 2, 1620, { size: 40, weight: 700, color: 'rgba(255,255,255,.85)', spacing: 4, alpha: k4 });
     sparkles(t, W / 2, 1780, 900, 21, YEL);
   }
 
