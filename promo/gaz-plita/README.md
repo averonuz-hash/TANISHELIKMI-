@@ -4,24 +4,25 @@
 
 Videoda doʻkonda olingan **haqiqiy rasmlar** ishlatilgan (`source/`). Oynali eshiklardagi suratga olgan odamning aksi `retouch.py` bilan olib tashlangan (`photos/`).
 
-## Modellar va narxlar (AVERON TECH narx yorliqlaridan)
+## Modellar va narxlar
 
-| Model | Rangi | Naqd | 12 oyga, oyiga |
-|---|---|---|---|
-| Lifetech LT-110 | Qora korpus, oltin rang oynali eshik | 2 087 250 soʻm | 252 209 soʻm |
-| Lifetech LT-305 | Toʻq kulrang, oynali eshik | 2 365 550 soʻm | 285 837 soʻm |
-| Lifetech LT-265 | Och kulrang, oynali eshik | 2 380 500 soʻm | 287 644 soʻm |
-| Ferre BT60-F31 | Toʻq jigarrang, shisha eshik | 2 472 500 soʻm | 298 760 soʻm |
+Narxlar doʻkon talabi boʻyicha **x.x99.999** koʻrinishida (oylik toʻlov **xx9.999**). Yorliqdagi narx eng yaqin shunday qiymatga yaxlitlangan.
 
-Muddatli toʻlov yorliqdagi formula boʻyicha: 3 oy = narx × 1.20 / 3, 6 oy = × 1.30 / 6, 9 oy = × 1.35 / 9, 12 oy = × 1.45 / 12. Bu formula LT-265 yorligʻida aniq tekshirildi.
-**LT-110 yorligʻi rasmda xira**, uning narxi formula orqali tiklandi. Joylashdan oldin yorliq bilan solishtirib chiqing.
+| Model | Rangi | Yorliqda | Videoda, naqd | 12 oyga, oyiga |
+|---|---|---|---|---|
+| Lifetech LT-110 | Qora korpus, oltin rang oynali eshik | 2 087 250 | **2.099.999 soʻm** | **249.999 soʻm** |
+| Lifetech LT-305 | Toʻq kulrang, oynali eshik | 2 365 550 | **2.399.999 soʻm** | **289.999 soʻm** |
+| Lifetech LT-265 | Och kulrang, oynali eshik | 2 380 500 | **2.399.999 soʻm** | **289.999 soʻm** |
+| Ferre BT60-F31 | Toʻq jigarrang, shisha eshik | 2 472 500 | **2.499.999 soʻm** | **299.999 soʻm** |
+
+Narxni oʻzgartirish uchun `scene.html` dagi `PRODUCTS` roʻyxatidagi `price` va `m12` qiymatlarini tahrirlang.
 
 ## Sahnalar
 
 | Vaqt | Sahna |
 |---|---|
 | 0–1 s | Gaz konforkasi yonadi (uchqun chiqillashi va alanga "vush" ovozi): "Oshxonangiz uchun YANGI GAZ PLITA!" |
-| 1–3 s | Ritmga mos 4 ta rasm almashadi: **AVERON** doʻkonida · **GAZ PLITALAR** · narxi **2 087 250 soʻmdan** · 3·6·9·12 oyga muddatli toʻlov |
+| 1–3 s | Ritmga mos 4 ta rasm almashadi: **AVERON** doʻkonida · **GAZ PLITALAR** · narxi **2.099.999 soʻmdan** · 3·6·9·12 oyga muddatli toʻlov |
 | 3–19 s | Har bir model 4 soniyadan: haqiqiy rasm sekin yaqinlashadi, ustidan yorugʻlik oʻtadi, haqiqiy detal belgilanadi (Duxovka 40–275 °C / Energiya sinfi A), naqd narx sanab chiqib "ding" bilan tushadi, keyin 12 oylik toʻlov. Pastda telefonlar yozilgan yugurma qator |
 | 19–24 s | 4 model narxlari bilan, muddatli toʻlov, **50-772-25-00** · **77-200-85-04**, "AVERON — sifat va qulay narx!" |
 

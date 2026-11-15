@@ -24,15 +24,15 @@ const BLUE = '#0B4DFF', RED = '#FF2D3B', INK = '#0D1321', YEL = '#FFD23F', GREEN
 const FONT = 'Inter';
 const PHONES = ['50-772-25-00', '77-200-85-04'];
 
-// Prices read from the store's AVERON TECH price tags (instalment = tag formula: 12 oy = price × 1.45 / 12)
+// Prices from the store's AVERON TECH price tags, rounded to the store's x.x99.999 format (monthly: xx9.999)
 const PRODUCTS = [
-  { id: 'lt110', brand: 'LIFETECH', model: 'LT-110', desc: 'Qora korpus · oltin rang oynali eshik', price: 2087250, m12: 252209,
+  { id: 'lt110', brand: 'LIFETECH', model: 'LT-110', desc: 'Qora korpus · oltin rang oynali eshik', price: 2099999, m12: 249999,
     callout: { x: 335, y: 240, label: 'Duxovka 40–275 °C' } },
-  { id: 'lt305', brand: 'LIFETECH', model: 'LT-305', desc: 'Toʻq kulrang · oynali eshik', price: 2365550, m12: 285837,
+  { id: 'lt305', brand: 'LIFETECH', model: 'LT-305', desc: 'Toʻq kulrang · oynali eshik', price: 2399999, m12: 289999,
     callout: { x: 430, y: 270, label: 'Duxovka 40–275 °C' } },
-  { id: 'lt265', brand: 'LIFETECH', model: 'LT-265', desc: 'Och kulrang · oynali eshik', price: 2380500, m12: 287644,
+  { id: 'lt265', brand: 'LIFETECH', model: 'LT-265', desc: 'Och kulrang · oynali eshik', price: 2399999, m12: 289999,
     callout: { x: 465, y: 370, label: 'Duxovka 40–275 °C' } },
-  { id: 'ferre', brand: 'FERRE', model: 'BT60-F31', desc: 'Toʻq jigarrang · shisha eshik', price: 2472500, m12: 298760,
+  { id: 'ferre', brand: 'FERRE', model: 'BT60-F31', desc: 'Toʻq jigarrang · shisha eshik', price: 2499999, m12: 299999,
     callout: { x: 262, y: 1040, label: 'Energiya sinfi A' } },
 ];
 const T_HOOK = 1.0, T_TITLE = [1.0, 3.0], T_PROD0 = 3.0, PROD_LEN = 4.0, T_CTA = 19.0;
@@ -71,7 +71,7 @@ function pill(str, cx, cy, { size = 44, fg = '#fff', bg = INK, padX = 34, padY =
   text(str, 0, 2, { size, weight, color: fg, spacing: 1 }); ctx.restore();
   return w;
 }
-const fmt = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const fmt = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 function logo(cx, cy, size, { color = '#fff', accent = YEL, alpha = 1, align = 'center' } = {}) {
   const sp = size * .08, w = measure('AVERON', size, 900, sp);
   const x0 = align === 'left' ? cx : cx - w / 2;
@@ -349,7 +349,7 @@ function drawFrame(t) {
     if (k3 > 0) {
       text('narxi', W / 2, 1060, { size: 54, weight: 700, color: '#fff', alpha: k3 });
       ctx.save(); ctx.translate(W / 2, 1170); ctx.scale(backOut(k3), backOut(k3));
-      text(`${fmt(2087250)} soʻmdan`, 0, 0, { size: 96, weight: 900, color: YEL, shadow: { c: 'rgba(0,0,0,.6)', b: 20, y: 6 } });
+      text(`${fmt(PRODUCTS[0].price)} soʻmdan`, 0, 0, { size: 96, weight: 900, color: YEL, shadow: { c: 'rgba(0,0,0,.6)', b: 20, y: 6 } });
       ctx.restore();
       pill('3 · 6 · 9 · 12 oyga muddatli toʻlov', W / 2, 1320, { size: 44, bg: '#fff', fg: INK, scale: backOut(seg(t, 1.9, 2.2)), weight: 900 });
     }
